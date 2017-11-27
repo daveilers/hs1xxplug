@@ -11,26 +11,27 @@ import (
 
 type Hs1xxPlug struct {
 	IPAddress string
+	Timeout time.Duration
 }
 
 func (p *Hs1xxPlug) TurnOn() (err error) {
 	json := `{"system":{"set_relay_state":{"state":1}}}`
 	data := encrypt(json)
-	_, err = send(p.IPAddress, data)
+	_, err = p.send(data)
 	return
 }
 
 func (p *Hs1xxPlug) TurnOff() (err error) {
 	json := `{"system":{"set_relay_state":{"state":0}}}`
 	data := encrypt(json)
-	_, err = send(p.IPAddress, data)
+	_, err = p.send(data)
 	return
 }
 
 func (p *Hs1xxPlug) SystemInfo() (results string, err error) {
 	json := `{"system":{"get_sysinfo":{}}}`
 	data := encrypt(json)
-	reading, err := send(p.IPAddress, data)
+	reading, err := p.send(data)
 	if err == nil {
 		results = decrypt(reading[4:])
 	}
@@ -40,7 +41,7 @@ func (p *Hs1xxPlug) SystemInfo() (results string, err error) {
 func (p *Hs1xxPlug) MeterInfo() (results string, err error) {
 	json := `{"system":{"get_sysinfo":{}}, "emeter":{"get_realtime":{},"get_vgain_igain":{}}}`
 	data := encrypt(json)
-	reading, err := send(p.IPAddress, data)
+	reading, err := p.send( data)
 	if err == nil {
 		results = decrypt(reading[4:])
 	}
@@ -50,7 +51,7 @@ func (p *Hs1xxPlug) MeterInfo() (results string, err error) {
 func (p *Hs1xxPlug) DailyStats(month int, year int) (results string, err error) {
 	json := fmt.Sprintf(`{"emeter":{"get_daystat":{"month":%d,"year":%d}}}`, month, year)
 	data := encrypt(json)
-	reading, err := send(p.IPAddress, data)
+	reading, err := p.send(data)
 	if err == nil {
 		results = decrypt(reading[4:])
 	}
@@ -89,9 +90,12 @@ func decrypt(ciphertext []byte) string {
 	return string(ciphertext)
 }
 
-func send(ip string, payload []byte) (data []byte, err error) {
+func (p *Hs1xxPlug)send(payload []byte) (data []byte, err error) {
 	// 10 second timeout
-	conn, err := net.DialTimeout("tcp", ip+":9999", time.Duration(10)*time.Second)
+	if p.Timeout == time.Duration(0) {
+		p.Timeout = time.Duration(10)*time.Second
+	}
+	conn, err := net.DialTimeout("tcp", p.IPAddress+":9999", p.Timeout)
 	if err != nil {
 		fmt.Println("Cannot connnect to plug:", err)
 		data = nil
